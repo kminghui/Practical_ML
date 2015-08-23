@@ -1,0 +1,61 @@
+---
+title: "Practical Machine Learning"
+author: "Koh M.H."
+date: "Thursday, August 20, 2015"
+output: html_document
+---
+
+## Executive Summary
+This report is about an analysis on data from the Weight Lifting Exercises (WLE) Dataset (see http://groupware.les.inf.puc-rio.br/har) to build a prediction model that can help to predict how well participants are doing certain movements during weight lifting exercising. The data provided are collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different ways, identified as classes A, B, C, D and E. Class A corresponds to a correct execution of the exercise, and the remaining 5 classes identify common mistakes in this weight lifting exercise. Thus, the goal is to build a prediction algorithm that takes in a set of sensor readings and predicts the corresponding class (A to E). To achieve this, first, the raw training data was explored with some data cleansing performed. Thereafter, the cleansed training data was split to 60% for model training purpose and 40% for testing purpose. A random forest prediction algorithm was used to create the model based on the 60% training data. The outcome was tested with the 40% testing data. With satisfactory accuracy, the model was then used to predict 20 test cases. The results were all correct and this showed that the model is of a certain high degree of reliability. 
+```{r, results='hide',message=FALSE}
+echo = TRUE ## Echo the codes
+```
+##Data Preparation - Data Loading and Cleansing
+The dataset provided comes in 2 files, namely pml-training.csv (training data) and pml-testing.csv(testing data comprising 20 test cases). We proceed to load data, assuming these data files are located in your R working directory. For all values with "NA" or blank, we fill them up with "NA" during loading.
+```{r}
+rawtrg <- read.csv("pml-training.csv",na.strings=c("NA",""))
+rawtesting <- read.csv("pml-testing.csv",na.strings=c("NA",""))
+```
+First we explore the training data set "rawtrg". There are a total of 19622 observations with 160 variables. Out of these 160 variables, it is noted that there are many variables whereby more than 95% of values are "NA". These variables will not be meaningful for prediction and thus will be discarded. Besides, for the purpose of prediction, only relevant data, which is sensor related data will be considered. Below are the codes for data cleansing for training set. With cleansing completed, we have a data set "trgdata" with 53 variables.
+
+```{r}
+# Discard columns with NAs
+NApercol <- apply(rawtrg, 2, function(x) { sum(is.na(x)) }) ##compute number of NAs in each column
+goodtrg <- rawtrg[, which(NApercol == 0)] ##only pick columns with zero NAs.
+# Discard non-sensor based data
+sensorrelated = grep(pattern = "_belt|_arm|_dumbbell|_forearm", names(goodtrg))
+trgdata = goodtrg[, c(sensorrelated,length(goodtrg))]
+dim(trgdata) #19622 53
+#check data
+table(complete.cases(trgdata))  ##all true
+table(sapply(trgdata[1,], class)) ##factor 1, integer 25, numeric 27
+```
+##Data Splitting
+We will split the "trgdata" data set to 60% for model training purpose and 40% for testing purpose. We call them training and testing respectively.
+```{r}
+library(caret)
+set.seed(1234)
+inTrain = createDataPartition(trgdata$classe, p = 0.6, list=FALSE)
+training = trgdata[inTrain, ] ##training contains 60% of the trgdata records
+testing = trgdata[-inTrain, ] ##testing contains 40% of the trgdata records
+dim(training) #11776 53
+dim(testing) #7846 53
+```
+##Model Training and Testing
+We will use the random forest algorithm to train the model. By nature of the random forest algorithm, it already includes substantial subsampling as it is an ensemble method using random samples with a lot of repetition. It is not necessary for performing cross-validation to try to get an unbiased estimate of the test set error. (see [here](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr) for more explanation). Moreover, cross validation is usually necessary if the data set is relatively small, which is not so in our case.
+```{r}
+library(randomForest)
+(randForest = randomForest(classe~., data=training, ntree = 300)) ##train
+```
+The outcome showed that the OOB estimate of error rate is very small and the confusion matrix showed that the prediction of this model is quite highly accurate. Next we will use this trained model to test the prediction using the 40% testing data.
+```{r}
+predictresult = predict(randForest, newdata = testing) ##predict
+confusionMatrix(predictresult, testing$classe)
+```
+From the confusion matrix above, it showed the prediction accuracy is quite high and the "Accuracy" (how often is the classifier correct) value indicates that out-of-sample error rate seems low.
+
+##Prediction of 20 test cases
+Now, we will want to use our trained model to predict the "class" for the testing data set "rawtesting", ie. the 20 test cases. The same data cleansing steps are first applied to this testing data set and then the prediction is run using the trained model. The predicted results were all correct! This concludes that the trained model is of a high degree of reliability. 
+
+
+
